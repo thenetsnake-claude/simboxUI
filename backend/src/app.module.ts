@@ -2,8 +2,16 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bull';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { User } from './entities/user.entity';
+import { UserInterceptor } from './common/interceptors/user.interceptor';
+import { SMSEagleModule } from './modules/smseagle/smseagle.module';
+import { MessagesModule } from './modules/messages/messages.module';
+import { ContactsModule } from './modules/contacts/contacts.module';
+import { GroupsModule } from './modules/groups/groups.module';
+import { ModemsModule } from './modules/modems/modems.module';
 
 @Module({
   imports: [
@@ -38,15 +46,24 @@ import { AppService } from './app.service';
       }),
     }),
 
-    // Feature modules will be imported here
-    // AuthModule,
-    // MessagesModule,
-    // ContactsModule,
-    // GroupsModule,
-    // ModemsModule,
-    // SyncModule,
+    // User entity for interceptor
+    TypeOrmModule.forFeature([User]),
+
+    // Feature modules
+    SMSEagleModule,
+    MessagesModule,
+    ContactsModule,
+    GroupsModule,
+    ModemsModule,
+    // SyncModule - to be added
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: UserInterceptor,
+    },
+  ],
 })
 export class AppModule {}
