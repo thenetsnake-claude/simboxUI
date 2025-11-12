@@ -137,3 +137,34 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Project specific
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Database data
+mysql-data/
+redis-data/
+dump.rdb
+
+# Docker
+docker-compose.override.yml
+
+# Angular
+.angular/
+*.ngfactory.ts
+*.ngsummary.json
+*.metadata.json
+
+# NestJS
+backend/.nest/
+
+# Build outputs
+backend/dist/
+frontend/dist/
+frontend/build/
