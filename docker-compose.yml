@@ -24,19 +24,33 @@ services:
       timeout: 5s
       retries: 5
 
-  # Redis Master (with authentication and TLS support)
+  # Redis Master (with ACL authentication and TLS support)
   redis-master:
     image: redis:7-alpine
     container_name: simbox-redis-master
     restart: unless-stopped
     command: >
-      redis-server
-      --requirepass ${REDIS_PASSWORD:-your-redis-password}
-      --masterauth ${REDIS_PASSWORD:-your-redis-password}
-      --maxmemory 256mb
-      --maxmemory-policy allkeys-lru
-      --appendonly yes
-      --port 6379
+      sh -c "
+      cat > /tmp/redis.conf <<EOF
+      port 6379
+      maxmemory 256mb
+      maxmemory-policy allkeys-lru
+      appendonly yes
+
+      # ACL Configuration
+      aclfile /data/users.acl
+      EOF
+
+      # Create ACL file if it doesn't exist
+      if [ ! -f /data/users.acl ]; then
+        cat > /data/users.acl <<EOF
+      user default on >${REDIS_PASSWORD:-your-redis-password} ~* &* +@all
+      user ${REDIS_USERNAME:-default} on >${REDIS_PASSWORD:-your-redis-password} ~* &* +@all
+      EOF
+      fi
+
+      redis-server /tmp/redis.conf
+      "
     ports:
       - "6379:6379"
     volumes:
@@ -45,7 +59,7 @@ services:
     networks:
       - simbox-network
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-your-redis-password}", "ping"]
+      test: ["CMD", "redis-cli", "--user", "${REDIS_USERNAME:-default}", "--pass", "${REDIS_PASSWORD:-your-redis-password}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -56,14 +70,30 @@ services:
     container_name: simbox-redis-replica-1
     restart: unless-stopped
     command: >
-      redis-server
-      --requirepass ${REDIS_PASSWORD:-your-redis-password}
-      --masterauth ${REDIS_PASSWORD:-your-redis-password}
-      --replicaof redis-master 6379
-      --maxmemory 256mb
-      --maxmemory-policy allkeys-lru
-      --appendonly yes
-      --port 6379
+      sh -c "
+      cat > /tmp/redis.conf <<EOF
+      port 6379
+      replicaof redis-master 6379
+      masteruser ${REDIS_USERNAME:-default}
+      masterauth ${REDIS_PASSWORD:-your-redis-password}
+      maxmemory 256mb
+      maxmemory-policy allkeys-lru
+      appendonly yes
+
+      # ACL Configuration
+      aclfile /data/users.acl
+      EOF
+
+      # Create ACL file if it doesn't exist
+      if [ ! -f /data/users.acl ]; then
+        cat > /data/users.acl <<EOF
+      user default on >${REDIS_PASSWORD:-your-redis-password} ~* &* +@all
+      user ${REDIS_USERNAME:-default} on >${REDIS_PASSWORD:-your-redis-password} ~* &* +@all
+      EOF
+      fi
+
+      redis-server /tmp/redis.conf
+      "
     depends_on:
       - redis-master
     volumes:
@@ -72,7 +102,7 @@ services:
     networks:
       - simbox-network
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-your-redis-password}", "ping"]
+      test: ["CMD", "redis-cli", "--user", "${REDIS_USERNAME:-default}", "--pass", "${REDIS_PASSWORD:-your-redis-password}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -83,14 +113,30 @@ services:
     container_name: simbox-redis-replica-2
     restart: unless-stopped
     command: >
-      redis-server
-      --requirepass ${REDIS_PASSWORD:-your-redis-password}
-      --masterauth ${REDIS_PASSWORD:-your-redis-password}
-      --replicaof redis-master 6379
-      --maxmemory 256mb
-      --maxmemory-policy allkeys-lru
-      --appendonly yes
-      --port 6379
+      sh -c "
+      cat > /tmp/redis.conf <<EOF
+      port 6379
+      replicaof redis-master 6379
+      masteruser ${REDIS_USERNAME:-default}
+      masterauth ${REDIS_PASSWORD:-your-redis-password}
+      maxmemory 256mb
+      maxmemory-policy allkeys-lru
+      appendonly yes
+
+      # ACL Configuration
+      aclfile /data/users.acl
+      EOF
+
+      # Create ACL file if it doesn't exist
+      if [ ! -f /data/users.acl ]; then
+        cat > /data/users.acl <<EOF
+      user default on >${REDIS_PASSWORD:-your-redis-password} ~* &* +@all
+      user ${REDIS_USERNAME:-default} on >${REDIS_PASSWORD:-your-redis-password} ~* &* +@all
+      EOF
+      fi
+
+      redis-server /tmp/redis.conf
+      "
     depends_on:
       - redis-master
     volumes:
@@ -99,7 +145,7 @@ services:
     networks:
       - simbox-network
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-your-redis-password}", "ping"]
+      test: ["CMD", "redis-cli", "--user", "${REDIS_USERNAME:-default}", "--pass", "${REDIS_PASSWORD:-your-redis-password}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -112,6 +158,7 @@ services:
     command: >
       sh -c "echo 'port 26379
       sentinel monitor mymaster redis-master 6379 2
+      sentinel auth-user mymaster ${REDIS_USERNAME:-default}
       sentinel auth-pass mymaster ${REDIS_PASSWORD:-your-redis-password}
       sentinel down-after-milliseconds mymaster 5000
       sentinel parallel-syncs mymaster 1
@@ -137,6 +184,7 @@ services:
     command: >
       sh -c "echo 'port 26379
       sentinel monitor mymaster redis-master 6379 2
+      sentinel auth-user mymaster ${REDIS_USERNAME:-default}
       sentinel auth-pass mymaster ${REDIS_PASSWORD:-your-redis-password}
       sentinel down-after-milliseconds mymaster 5000
       sentinel parallel-syncs mymaster 1
@@ -162,6 +210,7 @@ services:
     command: >
       sh -c "echo 'port 26379
       sentinel monitor mymaster redis-master 6379 2
+      sentinel auth-user mymaster ${REDIS_USERNAME:-default}
       sentinel auth-pass mymaster ${REDIS_PASSWORD:-your-redis-password}
       sentinel down-after-milliseconds mymaster 5000
       sentinel parallel-syncs mymaster 1

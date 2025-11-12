@@ -12,9 +12,10 @@ The Redis setup includes:
 ## Features
 
 - **High Availability**: Automatic failover with Redis Sentinel
-- **Authentication**: Username/password authentication for Redis
+- **ACL Authentication**: Username/password authentication using Redis ACL (Access Control Lists)
 - **TLS Support**: Optional TLS encryption for Redis connections
 - **Persistence**: AOF (Append Only File) for data durability
+- **Resource Management**: Memory limits with LRU eviction policy
 
 ## Configuration
 
@@ -47,6 +48,30 @@ The `docker-compose.yml` includes:
 5. **redis-sentinel-2**: Sentinel instance (port 26380)
 6. **redis-sentinel-3**: Sentinel instance (port 26381)
 
+### ACL Authentication
+
+Redis uses ACL (Access Control Lists) for username/password authentication:
+
+**How It Works:**
+- Each Redis instance creates a `users.acl` file on startup
+- Two users are configured: `default` and your custom `REDIS_USERNAME`
+- Both users have full permissions (`~* &* +@all`)
+- Replicas authenticate to master using `masteruser` and `masterauth`
+- Sentinels authenticate using `sentinel auth-user` and `sentinel auth-pass`
+
+**ACL File Format:**
+```
+user default on >your-password ~* &* +@all
+user myuser on >your-password ~* &* +@all
+```
+
+**ACL Permissions Explained:**
+- `on` - User is active
+- `>password` - Hashed password (Redis handles hashing)
+- `~*` - Access to all keys
+- `&*` - Access to all channels (pub/sub)
+- `+@all` - All commands allowed
+
 ### Sentinel Configuration
 
 Sentinels are configured with:
@@ -54,6 +79,7 @@ Sentinels are configured with:
 - **Down After**: 5000ms (time before marking master as down)
 - **Failover Timeout**: 10000ms (time to complete failover)
 - **Parallel Syncs**: 1 (number of replicas that can sync at once)
+- **Auth**: Uses username/password to connect to master/replicas
 
 ## TLS Setup (Optional)
 
@@ -125,11 +151,14 @@ redis-master:
 # Start all services
 docker-compose up -d
 
-# Check Redis master status
-docker exec -it simbox-redis-master redis-cli -a your-redis-password ping
+# Check Redis master status (using username and password)
+docker exec -it simbox-redis-master redis-cli --user default --pass your-redis-password ping
 
 # Check replication status
-docker exec -it simbox-redis-master redis-cli -a your-redis-password info replication
+docker exec -it simbox-redis-master redis-cli --user default --pass your-redis-password info replication
+
+# View ACL users
+docker exec -it simbox-redis-master redis-cli --user default --pass your-redis-password ACL LIST
 
 # Check sentinel status
 docker exec -it simbox-redis-sentinel-1 redis-cli -p 26379 sentinel masters
@@ -189,8 +218,8 @@ docker logs -f simbox-redis-sentinel-3
 ### Monitor Redis Metrics
 
 ```bash
-# Connect to Redis CLI
-docker exec -it simbox-redis-master redis-cli -a your-redis-password
+# Connect to Redis CLI with ACL authentication
+docker exec -it simbox-redis-master redis-cli --user default --pass your-redis-password
 
 # Get server info
 INFO
@@ -203,16 +232,42 @@ INFO memory
 
 # Get client connections
 CLIENT LIST
+
+# View ACL users and permissions
+ACL LIST
+
+# View current user
+ACL WHOAMI
 ```
 
 ## Security Best Practices
 
-1. **Change Default Password**: Always use a strong, unique password
-2. **Enable TLS**: Use TLS in production environments
-3. **Limit Network Access**: Use firewalls to restrict Redis access
-4. **Regular Backups**: Backup Redis data regularly
-5. **Monitor Logs**: Watch for unauthorized access attempts
-6. **Update Regularly**: Keep Redis and Sentinel updated
+1. **Strong Authentication**:
+   - Use a unique username (not 'default' in production)
+   - Use strong, randomly generated passwords (32+ characters)
+   - Change `REDIS_USERNAME` from 'default' to a custom username
+
+2. **ACL Permissions**:
+   - Limit user permissions based on needs
+   - Create separate users for different applications
+   - Use read-only users for monitoring tools
+
+3. **Enable TLS**: Use TLS in production environments
+
+4. **Limit Network Access**: Use firewalls to restrict Redis access
+
+5. **Regular Backups**: Backup Redis data regularly
+
+6. **Monitor Logs**: Watch for unauthorized access attempts
+
+7. **Update Regularly**: Keep Redis and Sentinel updated
+
+8. **Disable Default User**: In production, disable the 'default' user
+   ```bash
+   # In users.acl file
+   user default off nopass ~* &* +@all
+   user myapp on >strong-password ~* &* +@all
+   ```
 
 ## Troubleshooting
 
@@ -232,12 +287,17 @@ docker exec -it simbox-redis-sentinel-1 ping redis-master
 
 Check replication status:
 ```bash
-docker exec -it simbox-redis-master redis-cli -a your-password INFO replication
+docker exec -it simbox-redis-master redis-cli --user default --pass your-password INFO replication
 ```
 
-Verify password is correct:
+Verify username and password are correct:
 ```bash
-docker exec -it simbox-redis-replica-1 redis-cli -a your-password ping
+docker exec -it simbox-redis-replica-1 redis-cli --user default --pass your-password ping
+```
+
+Check ACL configuration:
+```bash
+docker exec -it simbox-redis-replica-1 cat /data/users.acl
 ```
 
 ### Connection Refused
