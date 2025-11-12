@@ -6,18 +6,20 @@ A web-based user interface for managing SMS communications through SMSEagle devi
 ## Technology Stack
 
 ### Backend
-- **Runtime**: Node.js
+- **Runtime**: Node.js 22 LTS
 - **Language**: TypeScript
-- **Framework**: Express.js
-- **Database**: MySQL
-- **Authentication**: Auth0
+- **Framework**: NestJS
+- **Database**: MySQL 8.0
+- **Authentication**: Auth0 (JWT with custom "role" claim)
 - **API Client**: Axios (for SMSEagle API communication)
+- **Background Jobs**: Bull Queue + Redis
 
 ### Frontend
-- **Framework**: Angular (latest stable version)
-- **UI Library**: Angular Material or PrimeNG
+- **Framework**: Angular 17+
+- **UI Library**: Angular Material
+- **Theme**: Light/Dark theme support
 - **Authentication**: Auth0 Angular SDK
-- **State Management**: RxJS / NgRx (to be decided)
+- **State Management**: RxJS Services
 
 ## Key Features
 
@@ -44,26 +46,33 @@ A web-based user interface for managing SMS communications through SMSEagle devi
   - Recipients (to/contacts/groups)
   - Scheduled date/time
   - Text encoding (standard/unicode)
-  - Validity period (up to 1 hour)
+  - Validity period (5min, 10min, 30min, 1h - default: 1h)
+  - Character limit: 2000 chars with counter
   - Modem selection (by name)
 
 ### 3. Contact Management
-- CRUD operations for contacts
+- CRUD operations for contacts (local DB is source of truth)
 - Contact properties:
   - Name
   - Phone number
 - Associate contacts with groups
+- Sync to SMSEagle when creating/updating contacts
+- Manual refresh button to pull from SMSEagle
 
 ### 4. Group Management
-- CRUD operations for contact groups
+- CRUD operations for contact groups (local DB is source of truth)
 - Group properties:
   - Name
   - Members (contacts)
 - Add/remove contacts from groups
+- Sync to SMSEagle when creating/updating groups
+- Manual refresh button to pull from SMSEagle
 
 ### 5. Modem Management (Admins only)
+- Single SMSEagle device with up to 8 modems
 - Assign custom names to modems
-- Map modem numbers to user-friendly names
+- Map modem numbers (1-8) to user-friendly names
+- View modem status and information
 
 ### 6. Message Synchronization
 - Intelligent sync system to minimize API calls
@@ -75,18 +84,25 @@ A web-based user interface for managing SMS communications through SMSEagle devi
 
 ### 7. UI/UX Requirements
 - Responsive design (mobile, tablet, desktop)
+- Light/Dark theme toggle
 - Fast loading and navigation
 - Pagination for message lists
-- Real-time or near real-time updates
+- Polling-based updates (every 30 seconds) with manual refresh button
 - Conversation threading
 - Messages ordered newest-first
 
 ## Environment Configuration
 All configuration via `.env` file:
-- Database credentials
-- SMSEagle API endpoint and token
-- Auth0 credentials
+- Database credentials (external MySQL for production)
+- SMSEagle API endpoint and token (full permissions)
+- Auth0 credentials (domain, audience, client ID)
 - Server port and other settings
+- Redis connection (for background jobs)
+
+## Deployment
+- **Development**: Docker Compose (MySQL + Redis + Backend + Frontend)
+- **Production**: Kubernetes deployment
+- **Database**: External MySQL 8.0 (simbox_ui)
 
 ## Non-Functional Requirements
 - Performance: Fast response times, efficient pagination
