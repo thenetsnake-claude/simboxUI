@@ -12,6 +12,7 @@ import { MessagesModule } from './modules/messages/messages.module';
 import { ContactsModule } from './modules/contacts/contacts.module';
 import { GroupsModule } from './modules/groups/groups.module';
 import { ModemsModule } from './modules/modems/modems.module';
+import { SyncModule } from './modules/sync/sync.module';
 
 @Module({
   imports: [
@@ -55,7 +56,7 @@ import { ModemsModule } from './modules/modems/modems.module';
     ContactsModule,
     GroupsModule,
     ModemsModule,
-    // SyncModule - to be added
+    SyncModule,
   ],
   controllers: [AppController],
   providers: [
