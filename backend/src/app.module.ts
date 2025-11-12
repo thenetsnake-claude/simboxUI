@@ -37,14 +37,73 @@ import { SyncModule } from './modules/sync/sync.module';
       }),
     }),
 
-    // Bull Queue (Redis)
+    // Bull Queue (Redis with Sentinel support)
     BullModule.forRootAsync({
-      useFactory: () => ({
-        redis: {
-          host: process.env.REDIS_HOST || 'localhost',
-          port: parseInt(process.env.REDIS_PORT, 10) || 6379,
-        },
-      }),
+      useFactory: () => {
+        const useSentinel = process.env.REDIS_SENTINEL_ENABLED === 'true';
+        const username = process.env.REDIS_USERNAME || undefined;
+        const password = process.env.REDIS_PASSWORD || undefined;
+        const tlsEnabled = process.env.REDIS_TLS_ENABLED === 'true';
+
+        if (useSentinel) {
+          // Redis Sentinel configuration
+          const sentinels = (process.env.REDIS_SENTINELS || 'localhost:26379')
+            .split(',')
+            .map(s => {
+              const [host, port] = s.trim().split(':');
+              return { host, port: parseInt(port, 10) || 26379 };
+            });
+
+          return {
+            redis: {
+              sentinels,
+              name: process.env.REDIS_MASTER_NAME || 'mymaster',
+              username,
+              password,
+              sentinelUsername: process.env.REDIS_SENTINEL_USERNAME || undefined,
+              sentinelPassword: process.env.REDIS_SENTINEL_PASSWORD || undefined,
+              ...(tlsEnabled && {
+                tls: {
+                  rejectUnauthorized: process.env.REDIS_TLS_REJECT_UNAUTHORIZED !== 'false',
+                  ...(process.env.REDIS_TLS_CA_CERT && {
+                    ca: process.env.REDIS_TLS_CA_CERT,
+                  }),
+                  ...(process.env.REDIS_TLS_CERT && {
+                    cert: process.env.REDIS_TLS_CERT,
+                  }),
+                  ...(process.env.REDIS_TLS_KEY && {
+                    key: process.env.REDIS_TLS_KEY,
+                  }),
+                },
+              }),
+            },
+          };
+        } else {
+          // Standard Redis configuration
+          return {
+            redis: {
+              host: process.env.REDIS_HOST || 'localhost',
+              port: parseInt(process.env.REDIS_PORT, 10) || 6379,
+              username,
+              password,
+              ...(tlsEnabled && {
+                tls: {
+                  rejectUnauthorized: process.env.REDIS_TLS_REJECT_UNAUTHORIZED !== 'false',
+                  ...(process.env.REDIS_TLS_CA_CERT && {
+                    ca: process.env.REDIS_TLS_CA_CERT,
+                  }),
+                  ...(process.env.REDIS_TLS_CERT && {
+                    cert: process.env.REDIS_TLS_CERT,
+                  }),
+                  ...(process.env.REDIS_TLS_KEY && {
+                    key: process.env.REDIS_TLS_KEY,
+                  }),
+                },
+              }),
+            },
+          };
+        }
+      },
     }),
 
     // User entity for interceptor

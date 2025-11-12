@@ -24,22 +24,209 @@ services:
       timeout: 5s
       retries: 5
 
-  # Redis for Bull Queue
-  redis:
+  # Redis Master (with ACL authentication and TLS support)
+  redis-master:
     image: redis:7-alpine
-    container_name: simbox-redis
+    container_name: simbox-redis-master
     restart: unless-stopped
+    command: >
+      sh -c "
+      cat > /tmp/redis.conf <<EOF
+      port 6379
+      maxmemory 256mb
+      maxmemory-policy allkeys-lru
+      appendonly yes
+
+      # ACL Configuration
+      aclfile /data/users.acl
+      EOF
+
+      # Create ACL file if it doesn't exist
+      if [ ! -f /data/users.acl ]; then
+        cat > /data/users.acl <<EOF
+      user default on >${REDIS_PASSWORD:-your-redis-password} ~* &* +@all
+      user ${REDIS_USERNAME:-default} on >${REDIS_PASSWORD:-your-redis-password} ~* &* +@all
+      EOF
+      fi
+
+      redis-server /tmp/redis.conf
+      "
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "6379:6379"
     volumes:
-      - redis-data:/data
+      - redis-master-data:/data
+      - ./redis/certs:/etc/redis/certs:ro
     networks:
       - simbox-network
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "--user", "${REDIS_USERNAME:-default}", "--pass", "${REDIS_PASSWORD:-your-redis-password}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
+
+  # Redis Replica 1
+  redis-replica-1:
+    image: redis:7-alpine
+    container_name: simbox-redis-replica-1
+    restart: unless-stopped
+    command: >
+      sh -c "
+      cat > /tmp/redis.conf <<EOF
+      port 6379
+      replicaof redis-master 6379
+      masteruser ${REDIS_USERNAME:-default}
+      masterauth ${REDIS_PASSWORD:-your-redis-password}
+      maxmemory 256mb
+      maxmemory-policy allkeys-lru
+      appendonly yes
+
+      # ACL Configuration
+      aclfile /data/users.acl
+      EOF
+
+      # Create ACL file if it doesn't exist
+      if [ ! -f /data/users.acl ]; then
+        cat > /data/users.acl <<EOF
+      user default on >${REDIS_PASSWORD:-your-redis-password} ~* &* +@all
+      user ${REDIS_USERNAME:-default} on >${REDIS_PASSWORD:-your-redis-password} ~* &* +@all
+      EOF
+      fi
+
+      redis-server /tmp/redis.conf
+      "
+    depends_on:
+      - redis-master
+    volumes:
+      - redis-replica-1-data:/data
+      - ./redis/certs:/etc/redis/certs:ro
+    networks:
+      - simbox-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--user", "${REDIS_USERNAME:-default}", "--pass", "${REDIS_PASSWORD:-your-redis-password}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Replica 2
+  redis-replica-2:
+    image: redis:7-alpine
+    container_name: simbox-redis-replica-2
+    restart: unless-stopped
+    command: >
+      sh -c "
+      cat > /tmp/redis.conf <<EOF
+      port 6379
+      replicaof redis-master 6379
+      masteruser ${REDIS_USERNAME:-default}
+      masterauth ${REDIS_PASSWORD:-your-redis-password}
+      maxmemory 256mb
+      maxmemory-policy allkeys-lru
+      appendonly yes
+
+      # ACL Configuration
+      aclfile /data/users.acl
+      EOF
+
+      # Create ACL file if it doesn't exist
+      if [ ! -f /data/users.acl ]; then
+        cat > /data/users.acl <<EOF
+      user default on >${REDIS_PASSWORD:-your-redis-password} ~* &* +@all
+      user ${REDIS_USERNAME:-default} on >${REDIS_PASSWORD:-your-redis-password} ~* &* +@all
+      EOF
+      fi
+
+      redis-server /tmp/redis.conf
+      "
+    depends_on:
+      - redis-master
+    volumes:
+      - redis-replica-2-data:/data
+      - ./redis/certs:/etc/redis/certs:ro
+    networks:
+      - simbox-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--user", "${REDIS_USERNAME:-default}", "--pass", "${REDIS_PASSWORD:-your-redis-password}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Sentinel 1
+  redis-sentinel-1:
+    image: redis:7-alpine
+    container_name: simbox-redis-sentinel-1
+    restart: unless-stopped
+    command: >
+      sh -c "echo 'port 26379
+      sentinel monitor mymaster redis-master 6379 2
+      sentinel auth-user mymaster ${REDIS_USERNAME:-default}
+      sentinel auth-pass mymaster ${REDIS_PASSWORD:-your-redis-password}
+      sentinel down-after-milliseconds mymaster 5000
+      sentinel parallel-syncs mymaster 1
+      sentinel failover-timeout mymaster 10000
+      sentinel deny-scripts-reconfig yes' > /tmp/sentinel.conf &&
+      redis-sentinel /tmp/sentinel.conf"
+    depends_on:
+      - redis-master
+      - redis-replica-1
+      - redis-replica-2
+    ports:
+      - "26379:26379"
+    volumes:
+      - redis-sentinel-1-data:/data
+    networks:
+      - simbox-network
+
+  # Redis Sentinel 2
+  redis-sentinel-2:
+    image: redis:7-alpine
+    container_name: simbox-redis-sentinel-2
+    restart: unless-stopped
+    command: >
+      sh -c "echo 'port 26379
+      sentinel monitor mymaster redis-master 6379 2
+      sentinel auth-user mymaster ${REDIS_USERNAME:-default}
+      sentinel auth-pass mymaster ${REDIS_PASSWORD:-your-redis-password}
+      sentinel down-after-milliseconds mymaster 5000
+      sentinel parallel-syncs mymaster 1
+      sentinel failover-timeout mymaster 10000
+      sentinel deny-scripts-reconfig yes' > /tmp/sentinel.conf &&
+      redis-sentinel /tmp/sentinel.conf"
+    depends_on:
+      - redis-master
+      - redis-replica-1
+      - redis-replica-2
+    ports:
+      - "26380:26379"
+    volumes:
+      - redis-sentinel-2-data:/data
+    networks:
+      - simbox-network
+
+  # Redis Sentinel 3
+  redis-sentinel-3:
+    image: redis:7-alpine
+    container_name: simbox-redis-sentinel-3
+    restart: unless-stopped
+    command: >
+      sh -c "echo 'port 26379
+      sentinel monitor mymaster redis-master 6379 2
+      sentinel auth-user mymaster ${REDIS_USERNAME:-default}
+      sentinel auth-pass mymaster ${REDIS_PASSWORD:-your-redis-password}
+      sentinel down-after-milliseconds mymaster 5000
+      sentinel parallel-syncs mymaster 1
+      sentinel failover-timeout mymaster 10000
+      sentinel deny-scripts-reconfig yes' > /tmp/sentinel.conf &&
+      redis-sentinel /tmp/sentinel.conf"
+    depends_on:
+      - redis-master
+      - redis-replica-1
+      - redis-replica-2
+    ports:
+      - "26381:26379"
+    volumes:
+      - redis-sentinel-3-data:/data
+    networks:
+      - simbox-network
 
   # NestJS Backend API
   backend:
@@ -52,7 +239,7 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
-      redis:
+      redis-master:
         condition: service_healthy
     environment:
       NODE_ENV: development
@@ -62,10 +249,22 @@ services:
       DB_NAME: ${DB_NAME:-simbox_ui}
       DB_USER: ${DB_USER:-simbox}
       DB_PASSWORD: ${DB_PASSWORD:-simbox}
-      REDIS_HOST: redis
+      # Redis Configuration
+      REDIS_SENTINEL_ENABLED: ${REDIS_SENTINEL_ENABLED:-false}
+      REDIS_HOST: redis-master
       REDIS_PORT: 6379
+      REDIS_USERNAME: ${REDIS_USERNAME:-default}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-your-redis-password}
+      # Redis Sentinel
+      REDIS_SENTINELS: redis-sentinel-1:26379,redis-sentinel-2:26379,redis-sentinel-3:26379
+      REDIS_MASTER_NAME: mymaster
+      # Redis TLS
+      REDIS_TLS_ENABLED: ${REDIS_TLS_ENABLED:-false}
+      REDIS_TLS_REJECT_UNAUTHORIZED: ${REDIS_TLS_REJECT_UNAUTHORIZED:-true}
+      # Auth0
       AUTH0_DOMAIN: ${AUTH0_DOMAIN}
       AUTH0_AUDIENCE: ${AUTH0_AUDIENCE}
+      # SMSEagle
       SMSEAGLE_BASE_URL: ${SMSEAGLE_BASE_URL}
       SMSEAGLE_ACCESS_TOKEN: ${SMSEAGLE_ACCESS_TOKEN}
     ports:
@@ -74,6 +273,7 @@ services:
       - ./backend:/app
       - /app/node_modules
       - ./backend/logs:/app/logs
+      - ./redis/certs:/etc/redis/certs:ro
     networks:
       - simbox-network
     command: npm run start:dev
@@ -102,7 +302,17 @@ services:
 volumes:
   mysql-data:
     driver: local
-  redis-data:
+  redis-master-data:
+    driver: local
+  redis-replica-1-data:
+    driver: local
+  redis-replica-2-data:
+    driver: local
+  redis-sentinel-1-data:
+    driver: local
+  redis-sentinel-2-data:
+    driver: local
+  redis-sentinel-3-data:
     driver: local
 
 networks:

@@ -1,0 +1,10 @@
+# Ignore all certificate files
+*.key
+*.crt
+*.csr
+*.srl
+*.pem
+
+# Keep this .gitignore and .gitkeep
+!.gitignore
+!.gitkeep

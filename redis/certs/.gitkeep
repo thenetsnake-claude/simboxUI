@@ -1,0 +1,2 @@
+# This directory stores Redis TLS certificates
+# See redis/README.md for instructions on generating certificates
